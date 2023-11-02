@@ -1,0 +1,114 @@
+1. Create a private git repository
+2. Add a new branch named as feature.
+3. Create a symple python file to print Hello world in starting and then print CPU, Mem usage of a pod in every 10 sec
+
+import time
+import psutil
+
+while True:
+    print("Hello World!")
+    cpu_percent = psutil.cpu_percent(interval=1)
+    mem_info = psutil.virtual_memory()
+    print(f"CPU Usage: {cpu_percent}%")
+    print(f"Memory Usage: {mem_info.percent}%")
+    time.sleep(10)
+    
+    
+3. Upload this file to the feature branch 
+4. Create a pull request to the main branch so that what ever changes are made to the file on the feature branch will be reflected on the main branch too.
+5. Install jenkins
+   sudo apt-get update
+   
+   sudo wget -O /usr/share/keyrings/jenkins-keyring.asc\https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+   
+   echo deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc]\https://pkg.jenkins.io/debian-stable binary/ | sudo tee\/etc/apt/sources.list.d/jenkins.list > /dev/null
+
+   sudo apt-get update
+
+   sudo apt-get install jenkins
+   
+   sudo systemctl start jenkins ----> to start jenkins
+   
+   Once Jenkns is installed check it with https://localhost:8080, this will open the Jenkins portal
+   
+6. The opening page asks for the Admin Password, head to the address mentioned on the screen and it will show the admin password with a set of strings
+7. Follow the instructions and set the user and password
+8. Now Jenkins is good to go
+9. Now create a new pipeline and enter the script for the pipeline to work.
+
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                git branch: 'main', url: 'https://github.com/Geethanjali0225/Jenkins.git'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    sh "docker build -t jenkins-assignment:v1 ."
+                    sh "docker tag jenkins-assignment:v1 geethanjali025/jenkins-assignment:v1"
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    sh "docker login -u geethanjali025 -p 123456789"
+                    sh "docker push geethanjali025/jenkins-assignment:v1"
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                script {
+                    sh "sudo -u sigmoid kubectl apply -f deployment.yaml"
+                }
+            }
+        }
+
+        stage('List Docker Images, Pods, and Deployments') {
+            steps {
+                script {
+                    sh "docker images"
+                    sh "sudo -u sigmoid kubectl get pods"
+                    sh "sudo -u sigmoid kubectl get deployments"
+                }
+            }
+        }
+
+        stage('Send Email Notification') {
+            steps {
+                script {
+                    emailext subject: "Jenkins Pipeline Status",
+                              body: currentBuild.resultIsBetterOrEqualTo('SUCCESS') ? "Your Jenkins pipeline has successfully completed." : "Your Jenkins pipeline has failed.",
+                              recipientProviders: [culprits(), developers(), requestor()],
+                              to: 'geethanjali.c2000@gmail.com'
+                }
+            }
+        }
+    }
+
+
+
+    post {
+        success {
+            script {
+                currentBuild.result = 'SUCCESS' // Set the build result to SUCCESS
+            }
+        }
+        failure {
+            script {
+                currentBuild.result = 'FAILURE' // Set the build result to FAILURE
+            }
+        }
+    }
+}
+
+10. To configure the Docker Credentials head on to 'Manage Jenkins' -> 'Credentials' -> Add the required credentials and make a note of the ID you give.
+11. Save and build the pipeline
